@@ -363,13 +363,23 @@ tbody tr.is-current { color: var(--accent); }
           </div>
         </aside>
       </div>
+      <div class="section-heading"><h2>Rendimiento</h2></div>
+      <div class="panel row">
+        <label for="fps-limit">Límite de FPS <span class="help block">Sin límite, el navegador marca el ritmo de renderizado.</span></label>
+        <select id="fps-limit"></select>
+      </div>
       <div class="actions"><button class="button primary" type="button" id="settings-done">Listo</button></div>
     </section>
 
     <section class="screen arena-screen" data-screen="arena" aria-label="Sala de entrenamiento" hidden>
       <canvas id="game-canvas" tabindex="0" aria-label="Sala en 3D. Ratón para apuntar, clic izquierdo para disparar y Escape para pausar."></canvas>
       <div class="arena-hud">
-        <div class="hud-left"><span id="hud-mode" class="hud-chip"></span><span id="hud-stat" class="hud-note"></span></div>
+        <div class="hud-left">
+          <span id="hud-mode" class="hud-chip"></span>
+          <span id="hud-input" class="hud-note" hidden>RAW INPUT</span>
+          <span id="hud-fps" class="hud-note">— FPS</span>
+          <span id="hud-stat" class="hud-note"></span>
+        </div>
         <div class="hud-timer"><span>RESTANTE</span><strong id="timer">01:00</strong></div>
         <button id="pause-button" type="button" class="button hud-chip">Pausa <span aria-hidden="true">ESC</span></button>
       </div>
@@ -440,9 +450,10 @@ tbody tr.is-current { color: var(--accent); }
     flicks: { name: "Flicks", icon: "flicks", short: "Objetivos sorpresa", description: "La ronda empieza vacía. Tras una pausa aparece un objetivo al frente. Cada acierto da paso a otra espera y a una posición aleatoria distinta." },
   };
   const DIRECTIONS = { left: [-1, 0], right: [1, 0], forward: [0, -1], back: [0, 1] };
+  const FPS_LIMITS = [0, 30, 60, 120, 144, 165, 240];
   const DEFAULTS = {
     mode: "bots", duration: 60, health: 100, directions: ["left", "right"], jump: false, width: 100, ballSize: 100, flickSize: 100,
-    normal: 1, ads: 0.65,
+    normal: 1, ads: 0.65, fpsLimit: 0,
     crosshair: { style: "static", color: "#8deaff", length: 8, thickness: 2, gap: 5, opacity: 100, outline: true, outlineWidth: 1, dot: false, tShape: false },
   };
   const RANGES = {
@@ -467,6 +478,7 @@ tbody tr.is-current { color: var(--accent); }
     for (const key of ["duration", "health", "width", "ballSize", "flickSize", "normal", "ads"]) {
       settings[key] = numberSetting(key, source[key], DEFAULTS[key]);
     }
+    if (FPS_LIMITS.includes(source.fpsLimit)) settings.fpsLimit = source.fpsLimit;
     settings.mode = has(MODES, source.mode) ? source.mode : DEFAULTS.mode;
     settings.directions = Object.keys(DIRECTIONS).filter((key) => (Array.isArray(source.directions) ? source.directions : DEFAULTS.directions).includes(key));
     settings.jump = source.jump === true;
@@ -712,7 +724,7 @@ tbody tr.is-current { color: var(--accent); }
     }
   }
 
-  window.PuntoCeroCore = { MODES, DIRECTIONS, DEFAULTS, RANGES, HISTORY_PREFIX, SETTINGS_KEY, clamp, settingsFrom, configKey, Round, inPeriod, readHistory, saveRound };
+  window.PuntoCeroCore = { MODES, DIRECTIONS, FPS_LIMITS, DEFAULTS, RANGES, HISTORY_PREFIX, SETTINGS_KEY, clamp, settingsFrom, configKey, Round, inPeriod, readHistory, saveRound };
 })();
 </script>
 <script>
@@ -1010,7 +1022,7 @@ tbody tr.is-current { color: var(--accent); }
 (() => {
   "use strict";
   const Core = window.PuntoCeroCore;
-  const { MODES, DEFAULTS, SETTINGS_KEY, HISTORY_PREFIX, clamp, settingsFrom, configKey, Round, inPeriod, readHistory, saveRound } = Core;
+  const { MODES, FPS_LIMITS, DEFAULTS, SETTINGS_KEY, HISTORY_PREFIX, clamp, settingsFrom, configKey, Round, inPeriod, readHistory, saveRound } = Core;
   const Arena = window.PuntoCeroArena;
   const by = (id) => document.getElementById(id);
   const all = (selector) => [...document.querySelectorAll(selector)];
@@ -1037,8 +1049,9 @@ tbody tr.is-current { color: var(--accent); }
   };
   const game = {
     round: null, phase: "menu", beforePause: "countdown", countdown: 3, at: 0, frame: 0,
-    locked: false, pointer: null, ads: false, bloom: 0, flash: 0, hit: false,
+    locked: false, rawInput: false, captureAttempt: 0, pointer: null, ads: false, bloom: 0, flash: 0, hit: false,
   };
+  const frameStats = { due: null, sampleStart: null, sampleFrames: 0, fps: null };
   let storage;
   try { storage = window.localStorage; } catch { storage = undefined; }
   let settings = settingsFrom(readSettings());
@@ -1150,6 +1163,7 @@ tbody tr.is-current { color: var(--accent); }
   }
 
   function renderSettings() {
+    by("fps-limit").value = String(settings.fpsLimit);
     for (const name of ["normal", "ads"]) {
       by(name).value = settings[name];
       setText(name + "-value", decimals.format(settings[name]));
@@ -1193,6 +1207,7 @@ tbody tr.is-current { color: var(--accent); }
       '<div><div class="row"><label for="crosshair-' + key + '">' + name + '</label><output for="crosshair-' + key + '" id="crosshair-' + key + '-value"></output></div><input type="range" id="crosshair-' + key + '" data-crosshair="' + key + '" min="' + min + '" max="' + max + '" step="1"></div>'
     ).join("");
     for (const [key, mode] of Object.entries(MODES)) by("history-mode").add(new Option(mode.name, key));
+    for (const limit of FPS_LIMITS) by("fps-limit").add(new Option(limit ? limit + " FPS" : "Sin límite", String(limit)));
   }
 
   function setMode(mode) {
@@ -1226,6 +1241,9 @@ tbody tr.is-current { color: var(--accent); }
     by("pause-overlay").hidden = !paused;
     by("pause-button").hidden = paused;
     gameCanvas.inert = paused;
+    by("hud-input").hidden = !game.locked || !game.rawInput;
+    by("hud-fps").hidden = paused;
+    setText("hud-fps", (frameStats.fps ?? "—") + " FPS");
     by("arena-tip").hidden = paused || game.locked || game.phase !== "running";
     setText("arena-tip", tracking ? "Mueve la mira sobre el bot para sumar tiempo en objetivo." : "Mueve la mira sobre el objetivo y haz clic para disparar.");
     setText("hud-mode", MODES[game.round.config.mode].name);
@@ -1239,16 +1257,31 @@ tbody tr.is-current { color: var(--accent); }
   }
 
   function releasePointer() {
+    game.captureAttempt += 1;
+    game.rawInput = false;
     if (document.pointerLockElement === gameCanvas) document.exitPointerLock?.();
   }
 
-  function capturePointer() {
+  async function capturePointer() {
     if (!gameCanvas.requestPointerLock || !window.matchMedia("(any-pointer: fine)").matches) return;
+    const attempt = ++game.captureAttempt;
+    game.rawInput = false;
     try {
-      const request = gameCanvas.requestPointerLock();
-      if (request) request.catch(() => renderArenaUi());
-    } catch {
-      renderArenaUi();
+      const request = gameCanvas.requestPointerLock({ unadjustedMovement: true });
+      // Legacy browsers may ignore the option and return no promise.
+      if (!request) return;
+      await request;
+      if (attempt === game.captureAttempt && activeRound() && document.pointerLockElement === gameCanvas) {
+        game.rawInput = true;
+      }
+    } catch (error) {
+      if (error?.name === "NotSupportedError" && attempt === game.captureAttempt && activeRound()) {
+        try {
+          await gameCanvas.requestPointerLock();
+        } catch {
+          // If pointer lock is unavailable, the round already supports cursor aiming.
+        }
+      }
     }
   }
 
@@ -1273,6 +1306,10 @@ tbody tr.is-current { color: var(--accent); }
   function stopFrame() {
     if (game.frame) window.cancelAnimationFrame(game.frame);
     game.frame = 0;
+    frameStats.due = null;
+    frameStats.sampleStart = null;
+    frameStats.sampleFrames = 0;
+    frameStats.fps = null;
   }
 
   function requestFrame() {
@@ -1283,10 +1320,37 @@ tbody tr.is-current { color: var(--accent); }
     game.frame = 0;
     advance(now);
     if (!activeRound()) return;
-    arena.resize();
-    renderArenaUi();
-    drawGame();
+    if (shouldDraw(now)) {
+      countFrame(now);
+      arena.resize();
+      renderArenaUi();
+      drawGame();
+    }
     requestFrame();
+  }
+
+  function shouldDraw(now) {
+    if (!settings.fpsLimit) return true;
+    const interval = 1000 / settings.fpsLimit;
+    const due = frameStats.due ?? now;
+    if (now + 0.4 < due) return false;
+    // Keep the deadline on the same cadence when the screen refresh and cap differ.
+    frameStats.due = (now - due >= interval ? now : due) + interval;
+    return true;
+  }
+
+  function countFrame(now) {
+    if (frameStats.sampleStart === null) {
+      frameStats.sampleStart = now;
+      return;
+    }
+    frameStats.sampleFrames += 1;
+    const elapsed = now - frameStats.sampleStart;
+    if (elapsed >= 500) {
+      frameStats.fps = Math.round(frameStats.sampleFrames * 1000 / elapsed);
+      frameStats.sampleStart = now;
+      frameStats.sampleFrames = 0;
+    }
   }
 
   function advance(now) {
@@ -1560,6 +1624,10 @@ tbody tr.is-current { color: var(--accent); }
     drawSightPreview();
   });
   by("crosshair-fields").addEventListener("change", storeSettings);
+  by("fps-limit").addEventListener("change", () => {
+    settings.fpsLimit = Number(by("fps-limit").value);
+    storeSettings();
+  });
   by("reset-crosshair").addEventListener("click", () => {
     settings.crosshair = { ...DEFAULTS.crosshair };
     storeSettings();
@@ -1608,6 +1676,7 @@ tbody tr.is-current { color: var(--accent); }
   document.addEventListener("pointerlockchange", () => {
     const wasLocked = game.locked;
     game.locked = document.pointerLockElement === gameCanvas;
+    if (!game.locked) game.rawInput = false;
     if (game.locked && !activeRound()) releasePointer();
     if (wasLocked && !game.locked && activeRound()) pauseRound();
     if (view === "arena") renderArenaUi();
@@ -1654,8 +1723,6 @@ tbody tr.is-current { color: var(--accent); }
     game.hit = result !== "miss";
     game.flash = 0.15;
     game.bloom = 10;
-    renderArenaUi();
-    drawGame();
   });
   window.addEventListener("pointerup", (event) => {
     if (event.button === 2 && game.ads) {
