@@ -1,0 +1,1691 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10152a">
+  <meta name="description" content="Entrenador de puntería en 3D con cuatro modos, mira configurable e historial de progreso.">
+  <title>Punto Cero · Entrenador de puntería</title>
+  <style>
+:root {
+  color-scheme: dark;
+  --ink: #f1f4ff;
+  --muted: #a6b0d0;
+  --body: #0b1021;
+  --base: #10162c;
+  --panel: #181f38;
+  --line: #344060;
+  --accent: #8deaff;
+  --accent-ink: #091626;
+  --accent-soft: #21334e;
+  --violet: #c4a9ff;
+  --coral: #ff796f;
+  --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font: 400 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--body); color: var(--ink); min-height: 100dvh; }
+body:not([data-view="arena"]) { display: flex; flex-direction: column; }
+body:not([data-view="arena"]) main { flex: 1; }
+body[data-view="arena"] { overflow: hidden; }
+body[data-view="arena"] :is(.site-header, .site-footer) { display: none; }
+:is(h1, h2, p, dl, dd, fieldset) { margin: 0; }
+:is(button, input, select) { font: inherit; }
+:is(button, select, input[type="checkbox"], input[type="range"], input[type="color"]) { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+button:disabled, input:disabled { cursor: default; opacity: .5; }
+canvas { display: block; }
+h1 { font-size: clamp(32px, 5.5vw, 54px); line-height: 1.04; font-weight: 780; letter-spacing: -.05em; }
+h2 { font-size: clamp(17px, 2.2vw, 22px); font-weight: 730; line-height: 1.22; letter-spacing: -.015em; }
+.shell { width: min(calc(100% - 42px), 1080px); margin-inline: auto; }
+.screen:not(.arena-screen) { padding-block: clamp(23px, 5vw, 47px); }
+.accent { color: var(--accent); }
+.help { color: var(--muted); font-size: .88rem; font-weight: 400; }
+.block { display: block; }
+.eyebrow, .tag { font: 650 11px/1.3 var(--mono); letter-spacing: .105em; }
+.eyebrow { color: var(--accent); }
+.tag {
+  display: inline-block;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  background: var(--base);
+}
+.site-header { background: #10162b; border-bottom: 1px solid #29334f; }
+.topbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; min-height: 62px; gap: 4px 15px; }
+.topbar nav { display: flex; flex-wrap: wrap; gap: 3px; }
+.topbar button { color: var(--muted); background: none; border: 0; padding: 8px 11px; border-radius: 6px; }
+.topbar nav button:hover, .topbar nav button[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+.topbar .wordmark { display: inline-flex; align-items: center; gap: 10px; padding-inline: 1px; font-weight: 850; letter-spacing: .135em; color: var(--ink); }
+.brand-icon { display: grid; place-items: center; width: 17px; height: 17px; border: 1px solid var(--accent); border-radius: 3px; transform: rotate(45deg); }
+.brand-icon::after { content: ""; width: 5px; height: 5px; background: var(--accent); box-shadow: 0 0 10px #8deaff7d; }
+.button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid transparent; border-radius: 7px; min-height: 42px; color: var(--ink); font-size: .91rem; font-weight: 680; }
+.primary { background: var(--accent); color: var(--accent-ink); }
+.primary:hover { background: #b9f3ff; }
+.secondary { background: var(--panel); border-color: var(--line); }
+.secondary:hover { border-color: var(--accent); }
+.text-button { color: var(--muted); background: transparent; }
+.text-button:hover { color: var(--ink); }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.hero, .result-stage {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: radial-gradient(ellipse at 68% 38%, #343f79, #1c274d 52%, #11172f 90%);
+}
+.hero { display: flex; align-items: center; min-height: clamp(285px, 39vw, 420px); }
+.hero::after { content: ""; position: absolute; z-index: -1; inset: 0; background: linear-gradient(90deg, #10162ff7, #10162fb0 39%, transparent 72%); }
+.hero-wall, .hero-floor { position: absolute; inset: 0; z-index: -2; pointer-events: none; }
+.hero-wall {
+  background: repeating-linear-gradient(0deg, #a3afe633 0 1px, transparent 1px 39px),
+              repeating-linear-gradient(90deg, #a3afe62c 0 1px, transparent 1px 46px),
+              linear-gradient(140deg, #425289, #263055);
+  clip-path: polygon(19% 14%, 81% 14%, 81% 66%, 19% 66%);
+}
+.hero-floor {
+  background: repeating-conic-gradient(from 110deg at 50% 45%, #849fef47 0deg .25deg, transparent .25deg 15deg),
+              repeating-linear-gradient(0deg, #849fef36 0 1px, transparent 1px 28px),
+              linear-gradient(#394779, #171e3c);
+  clip-path: polygon(19% 66%, 81% 66%, 100% 100%, 0 100%);
+}
+.hero-copy { padding: clamp(19px, 5.5vw, 54px); }
+.hero .eyebrow { display: flex; gap: 7px; align-items: center; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 11px #8deaff9f; }
+.hero h1 { font-size: clamp(44px, 8.8vw, 91px); margin-block: 7px 10px; }
+.hero-copy > p:not(.eyebrow) { color: #c6d2f4; max-width: 33ch; }
+.hero .button { margin-top: 17px; }
+.hero-targets { position: absolute; inset: 0; z-index: -2; pointer-events: none; }
+.hero-targets i {
+  position: absolute;
+  width: var(--size);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #ffe2ce, #ff9c86 24%, var(--coral) 54%, #b6315c 95%);
+  box-shadow: 0 0 29px #ff796f50, 0 10px 24px #080b2470;
+}
+.hero-targets i:nth-child(1) { --size: clamp(23px, 6vw, 59px); left: 68%; top: 20%; }
+.hero-targets i:nth-child(2) { --size: clamp(37px, 10vw, 102px); left: 80%; top: 43%; }
+.hero-targets i:nth-child(3) { --size: clamp(20px, 5vw, 46px); left: 59%; top: 62%; }
+.hero-hud { display: flex; justify-content: space-between; position: absolute; inset: auto 14px 11px; color: #b8c8f1; font: 600 10px/1 var(--mono); letter-spacing: .13em; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-block: 25px 11px; }
+.mode-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; }
+.mode-card {
+  display: grid; align-content: start; gap: 5px; text-align: left; min-width: 0;
+  padding: clamp(11px, 2vw, 17px); border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink);
+}
+.mode-card:hover { border-color: var(--accent); background: #1a2843; }
+.mode-card strong { font-size: 1.05rem; }
+.mode-icon { display: grid; place-items: center; width: 35px; height: 32px; margin-bottom: 3px; border-radius: 5px; background: var(--accent-soft); color: var(--accent); }
+.mode-icon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.mode-card:nth-child(2) .mode-icon { color: #ff9c8b; background: #3c2943; }
+.mode-card:nth-child(3) .mode-icon { color: var(--violet); background: #30284d; }
+.recent-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; }
+.recent-bar > div { display: grid; gap: 3px; }
+.page-heading { margin-bottom: 22px; }
+.page-heading h1, .result-heading h1 { margin-top: 6px; }
+.page-heading .help { margin-top: 7px; }
+.setup-grid, .settings-grid, .crosshair-grid { display: grid; gap: 13px; align-items: start; }
+.setup-grid, .crosshair-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+.settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: clamp(12px, 2.3vw, 18px); }
+.stack { display: grid; gap: 12px; }
+.row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 7px 14px; }
+.row > label { font-weight: 680; }
+fieldset { padding: 0; border: none; min-inline-size: 0; }
+legend { padding: 0; margin-bottom: 7px; color: var(--muted); font-size: .85rem; font-weight: 640; }
+.picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.picker button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.checks { display: flex; flex-wrap: wrap; gap: 4px 15px; }
+.checks label, .check { display: flex; align-items: center; gap: 7px; min-height: 29px; }
+input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+input[type="range"] { display: block; margin: 11px 0 5px; width: 100%; accent-color: var(--accent); }
+.unit { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+select, input[type="number"], input[type="color"] { background: var(--base); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); min-height: 37px; padding: 6px 8px; }
+input[type="number"] { width: 86px; }
+input[type="color"] { width: 63px; padding: 4px; }
+output { color: var(--accent); font: 650 .92rem/1.2 var(--mono); white-space: nowrap; }
+.ads-panel :is(output, .tag) { color: var(--violet); }
+.ads-panel input[type="range"] { accent-color: var(--violet); }
+.mode-preview { padding: 0; overflow: hidden; }
+.preview-stage { height: clamp(180px, 25vw, 255px); position: relative; background: var(--base); }
+.preview-stage canvas { width: 100%; height: 100%; }
+.stage-tag { position: absolute; top: 10px; left: 10px; pointer-events: none; }
+.preview-copy { padding: 12px 14px; }
+.preview-copy .help { margin-top: 5px; }
+.preview-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.crosshair-selects, .range-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 13px; }
+.crosshair-selects label, .history-filters label { display: grid; gap: 4px; color: var(--muted); font-size: .85rem; font-weight: 630; }
+.range-grid label { font-size: .87rem; }
+.range-grid input[type="range"] { margin-top: 6px; }
+.crosshair-checks { font-size: .89rem; }
+.arena-screen { position: relative; width: 100%; height: 100dvh; overflow: hidden; background: #141b38; }
+#game-canvas { width: 100%; height: 100%; cursor: none; touch-action: none; }
+#game-canvas:focus-visible { outline-offset: -4px; }
+.arena-hud {
+  position: absolute; z-index: 3; inset: max(10px, env(safe-area-inset-top)) clamp(9px, 2.6vw, 25px) auto;
+  display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: start; pointer-events: none;
+}
+.hud-left { display: grid; gap: 5px; justify-items: start; }
+.hud-chip, .hud-timer { padding: 7px 10px; border: 1px solid #495b87; border-radius: 6px; background: #10172eea; }
+.hud-chip { font: 650 .78rem/1.15 var(--mono); white-space: nowrap; }
+.hud-note { color: #d2dcfa; font: 600 .73rem/1.2 var(--mono); text-shadow: 0 1px 4px #040818; }
+.hud-timer { display: grid; justify-items: center; gap: 2px; color: var(--accent); font-family: var(--mono); }
+.hud-timer span { font-size: .63rem; letter-spacing: .115em; }
+.hud-timer strong { font-size: clamp(22px, 4vw, 36px); line-height: 1; font-variant-numeric: tabular-nums; }
+#pause-button { justify-self: end; pointer-events: auto; }
+.arena-overlay { position: absolute; z-index: 2; inset: 0; display: grid; place-items: center; }
+.countdown { display: grid; text-align: center; gap: 5px; }
+#countdown-overlay { pointer-events: none; background: #0c122851; }
+.countdown strong { font-size: clamp(90px, 20vw, 168px); line-height: .95; color: var(--accent); font-weight: 800; text-shadow: 0 0 31px #56cff882; }
+.pause-overlay { background: #0b1026b8; padding: 70px 12px 18px; }
+.pause-panel { width: min(100%, 310px); max-height: 100%; overflow-y: auto; display: grid; gap: 7px; border-top: 3px solid var(--accent); box-shadow: 0 14px 35px #03081b95; }
+.pause-panel h2 { font-size: 32px; margin-bottom: 6px; }
+.arena-tip { position: absolute; z-index: 1; bottom: 15px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px); padding: 6px 9px; text-align: center; background: #10172ee8; border-radius: 5px; color: #d0daf8; font-size: .78rem; pointer-events: none; }
+.result-stage { padding: clamp(10px, 4vw, 35px); }
+.result-panel { max-width: 680px; margin-inline: auto; border-top: 3px solid var(--accent); padding: clamp(13px, 3vw, 24px); box-shadow: 0 15px 31px #090e2480; }
+.result-heading h1 { font-size: clamp(27px, 5vw, 44px); }
+.score { display: flex; flex-wrap: wrap; gap: 7px 22px; align-items: end; justify-content: space-between; padding: 11px 15px; margin-block: 13px; background: var(--accent-soft); border-radius: 8px; }
+.score > div:first-child strong { display: block; font-size: clamp(44px, 8vw, 70px); font-weight: 790; line-height: 1; letter-spacing: -.055em; font-variant-numeric: tabular-nums; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 19px; }
+.stats > div { display: flex; flex-direction: column; justify-content: space-between; gap: 4px; padding-inline-start: 8px; border-inline-start: 1px solid var(--line); }
+.stats dt { color: var(--muted); font-size: .81rem; line-height: 1.25; }
+.stats dd { font-size: clamp(17px, 3.6vw, 24px); font-weight: 730; font-variant-numeric: tabular-nums; }
+.history-filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.history-filters label { flex: 1 1 175px; max-width: 285px; }
+.history-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-bottom: 13px; }
+.history-summary article { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; }
+.history-summary strong { display: block; font-size: 1.25rem; color: var(--accent); }
+.table-wrap { overflow-x: auto; margin-top: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: .86rem; font-variant-numeric: tabular-nums; }
+:is(th, td) { padding: 7px 6px; text-align: left; white-space: nowrap; }
+thead { color: var(--muted); }
+.numeric { text-align: right; }
+tbody tr { border-top: 1px solid var(--line); }
+tbody tr.is-current { color: var(--accent); }
+.empty { padding: 13px 0 3px; color: var(--muted); }
+.site-footer { padding: 13px 0 19px; color: var(--muted); font-size: .78rem; }
+.site-footer .shell { border-top: 1px solid #29334f; padding-top: 12px; display: flex; justify-content: space-between; gap: 7px 16px; flex-wrap: wrap; }
+.site-footer .shell span:first-child { font: 650 11px/1.5 var(--mono); letter-spacing: .12em; }
+.notice { position: fixed; z-index: 5; inset: auto 14px 14px auto; max-width: min(360px, calc(100% - 28px)); padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 6px 24px #03081880; }
+
+@media (max-width: 675px) {
+  .shell { width: calc(100% - 26px); }
+  .mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :is(.setup-grid, .settings-grid, .crosshair-grid) { grid-template-columns: 1fr; }
+  .history-filters label { max-width: none; }
+}
+@media (max-width: 390px) {
+  .topbar { padding-block: 5px; }
+  .topbar button { padding-inline: 7px; }
+  .hero-copy { padding-inline: 14px; }
+  .hero .hero-targets i:nth-child(2) { left: 78%; }
+  .section-heading { gap: 5px; }
+  .section-heading h2 { font-size: 16px; }
+  .history-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .result-panel .actions .button { flex: 1 1 auto; }
+}
+@media (pointer: coarse) {
+  :is(.topbar button, .button, select, input[type="number"], .checks label, .check) { min-height: 44px; }
+}
+</style>
+  
+  
+  
+</head>
+<body data-view="home">
+  <header class="site-header">
+    <div class="shell topbar">
+      <button class="wordmark" type="button" data-go="home" aria-label="Punto Cero, inicio">
+        <span class="brand-icon" aria-hidden="true"></span><span>PUNTO<span class="accent">CERO</span></span>
+      </button>
+      <nav aria-label="Menú principal">
+        <button type="button" data-go="home" aria-current="page">Inicio</button>
+        <button type="button" data-go="history">Historial</button>
+        <button type="button" data-go="settings">Ajustes</button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="shell screen" data-screen="home" aria-labelledby="home-title">
+      <div class="hero">
+        <div class="hero-wall" aria-hidden="true"></div><div class="hero-floor" aria-hidden="true"></div>
+        <div class="hero-targets" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> SALA DE ENTRENAMIENTO</p>
+          <h1 id="home-title">Entrena tu<br>puntería<span class="accent">.</span></h1>
+          <p>Elige un modo, prepara tu ronda y sigue tu progreso.</p>
+          <button class="button primary" type="button" data-go="setup">Preparar ronda <span aria-hidden="true">→</span></button>
+        </div>
+        <div class="hero-hud" aria-hidden="true"><span>CAMPO 01</span><span>⌖</span></div>
+      </div>
+      <div class="section-heading">
+        <h2>Modos de entrenamiento</h2><span class="tag">04 MODOS</span>
+      </div>
+      <div id="home-modes" class="mode-grid"></div>
+      <div id="home-last" class="recent-bar" hidden>
+        <div><span class="eyebrow">ÚLTIMA RONDA</span><strong id="home-last-label"></strong></div>
+        <button type="button" class="button secondary" data-go="history">Ver historial <span aria-hidden="true">→</span></button>
+      </div>
+    </section>
+
+    <section class="shell screen" data-screen="setup" aria-labelledby="setup-title" hidden>
+      <div class="page-heading"><p class="eyebrow">ENTRENAMIENTO</p><h1 id="setup-title">Preparar ronda</h1></div>
+      <form id="setup-form">
+        <div class="setup-grid">
+          <div class="stack">
+            <fieldset>
+              <legend>Modo de entrenamiento</legend>
+              <div id="mode-picker" class="picker"></div>
+            </fieldset>
+            <div class="panel row">
+              <label for="duration">Duración de la ronda <span class="help block">De 5 segundos a 30 minutos</span></label>
+              <div class="unit"><input id="duration" name="duration" type="number" min="5" max="1800" step="1" required><span>s</span></div>
+            </div>
+            <div class="panel stack" data-options="bots">
+              <div class="row">
+                <label for="health">Vida del bot <span class="help block">25 PV de daño por impacto</span></label>
+                <div class="unit"><input id="health" name="health" type="number" min="1" max="1000" step="1" required><span>PV</span></div>
+              </div>
+              <fieldset>
+                <legend>Direcciones permitidas</legend>
+                <div class="checks">
+                  <label><input type="checkbox" name="direction" value="left"> Izquierda</label>
+                  <label><input type="checkbox" name="direction" value="right"> Derecha</label>
+                  <label><input type="checkbox" name="direction" value="forward"> Adelante</label>
+                  <label><input type="checkbox" name="direction" value="back"> Atrás</label>
+                </div>
+              </fieldset>
+              <label class="check"><input id="jump" type="checkbox"> Permitir saltos</label>
+            </div>
+            <div class="panel" data-options="tracking" hidden>
+              <div class="row"><label for="width">Grosor del bot</label><output for="width" id="width-value"></output></div>
+              <input id="width" type="range" min="40" max="180" step="5">
+              <p class="help">Mantén la mira sobre el bot para sumar tiempo en objetivo.</p>
+            </div>
+            <div class="panel" data-options="orbs" hidden>
+              <div class="row"><label for="orb-size">Tamaño de la bola</label><output for="orb-size" id="orb-size-value"></output></div>
+              <input id="orb-size" type="range" min="40" max="160" step="5">
+              <p class="help">El tamaño se guarda por separado para este modo.</p>
+            </div>
+          </div>
+          <aside class="panel mode-preview" aria-label="Vista previa del modo">
+            <div class="preview-stage"><canvas id="mode-preview" aria-label="Zona frontal de la sala"></canvas><span class="tag stage-tag">VISTA FRONTAL</span></div>
+            <div class="preview-copy"><h2 id="mode-name"></h2><p id="mode-description" class="help"></p></div>
+          </aside>
+        </div>
+        <div class="actions"><button type="button" class="button secondary" data-go="home">Volver</button><button class="button primary" type="submit">Jugar <span aria-hidden="true">→</span></button></div>
+      </form>
+    </section>
+
+    <section class="shell screen" data-screen="settings" aria-labelledby="settings-title" hidden>
+      <div class="page-heading"><p class="eyebrow">CONTROLES</p><h1 id="settings-title">Ajustes de puntería</h1><p class="help">Personaliza la velocidad del ratón y la mira del centro de la pantalla.</p></div>
+      <div class="settings-grid">
+        <div class="panel">
+          <div class="row"><label for="normal">Sensibilidad normal</label><output for="normal" id="normal-value"></output></div>
+          <input id="normal" type="range" min="0.05" max="5" step="0.01">
+          <p class="help">Velocidad de la cámara al mover el ratón.</p>
+        </div>
+        <div class="panel ads-panel">
+          <div class="row"><label for="ads">Sensibilidad al apuntar <span class="tag">ADS</span></label><output for="ads" id="ads-value"></output></div>
+          <input id="ads" type="range" min="0.05" max="5" step="0.01">
+          <p class="help">Se aplica mientras mantienes pulsado el clic derecho.</p>
+        </div>
+      </div>
+      <div class="section-heading"><h2>Mira personalizada</h2><span class="tag">ESTILO CS2</span></div>
+      <div class="crosshair-grid">
+        <div id="crosshair-fields" class="panel stack">
+          <div class="crosshair-selects">
+            <label for="crosshair-style">Estilo
+              <select id="crosshair-style" data-crosshair="style"><option value="static">Clásica fija</option><option value="dynamic">Clásica dinámica</option><option value="dot">Punto</option></select>
+            </label>
+            <label for="crosshair-color">Color
+              <input id="crosshair-color" type="color" data-crosshair="color">
+            </label>
+          </div>
+          <div id="crosshair-ranges" class="range-grid"></div>
+          <div class="checks crosshair-checks">
+            <label><input type="checkbox" data-crosshair="dot"> Punto central</label>
+            <label><input type="checkbox" data-crosshair="outline"> Contorno</label>
+            <label><input type="checkbox" data-crosshair="tShape"> Forma de T</label>
+          </div>
+        </div>
+        <aside class="panel mode-preview" aria-label="Vista previa de la mira">
+          <div class="preview-stage crosshair-stage"><canvas id="crosshair-preview" aria-label="Mira sobre la sala de entrenamiento"></canvas><span class="tag stage-tag">VISTA PREVIA</span></div>
+          <div class="preview-copy preview-actions">
+            <button type="button" class="button secondary" id="test-crosshair">Probar disparo</button>
+            <button type="button" class="button text-button" id="reset-crosshair">Restaurar mira</button>
+          </div>
+        </aside>
+      </div>
+      <div class="actions"><button class="button primary" type="button" id="settings-done">Listo</button></div>
+    </section>
+
+    <section class="screen arena-screen" data-screen="arena" aria-label="Sala de entrenamiento" hidden>
+      <canvas id="game-canvas" tabindex="0" aria-label="Sala en 3D. Ratón para apuntar, clic izquierdo para disparar y Escape para pausar."></canvas>
+      <div class="arena-hud">
+        <div class="hud-left"><span id="hud-mode" class="hud-chip"></span><span id="hud-stat" class="hud-note"></span></div>
+        <div class="hud-timer"><span>RESTANTE</span><strong id="timer">01:00</strong></div>
+        <button id="pause-button" type="button" class="button hud-chip">Pausa <span aria-hidden="true">ESC</span></button>
+      </div>
+      <div id="countdown-overlay" class="arena-overlay" hidden>
+        <div class="countdown"><span class="eyebrow">PREPÁRATE</span><strong id="countdown-number">3</strong></div>
+      </div>
+      <div id="pause-overlay" class="arena-overlay pause-overlay" hidden>
+        <div class="panel pause-panel" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+          <p class="eyebrow">RONDA EN CURSO</p><h2 id="pause-title">En pausa</h2>
+          <button type="button" class="button primary" id="resume-button">Continuar</button>
+          <button type="button" class="button secondary" id="restart-button">Reiniciar ronda</button>
+          <button type="button" class="button secondary" id="pause-settings">Ajustes de puntería</button>
+          <button type="button" class="button text-button" id="leave-button">Salir al menú</button>
+        </div>
+      </div>
+      <p id="arena-tip" class="arena-tip" hidden></p>
+    </section>
+
+    <section class="shell screen" data-screen="results" aria-labelledby="result-title" hidden>
+      <div class="result-stage">
+        <div class="hero-wall" aria-hidden="true"></div><div class="hero-floor" aria-hidden="true"></div>
+        <div class="panel result-panel">
+          <div class="row result-heading">
+            <div><p id="result-mode" class="eyebrow"></p><h1 id="result-title">Ronda terminada</h1></div><span id="result-saved" class="tag"></span>
+          </div>
+          <div class="score">
+            <div><p class="eyebrow">PUNTUACIÓN</p><strong id="result-score"></strong></div>
+            <div><strong id="result-delta" class="accent"></strong><p id="result-compare" class="help"></p></div>
+          </div>
+          <dl id="result-metrics" class="stats"></dl>
+          <h2>Últimas rondas</h2><p class="help">Mismo modo, duración y dificultad.</p>
+          <div id="result-history"></div>
+          <div class="actions">
+            <button type="button" class="button text-button" data-go="home">Volver al menú</button>
+            <button type="button" class="button secondary" id="result-all">Ver historial</button>
+            <button type="button" class="button primary" id="repeat-button">Repetir ronda <span aria-hidden="true">↻</span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="shell screen" data-screen="history" aria-labelledby="history-title" hidden>
+      <div class="page-heading"><p class="eyebrow">TU PROGRESO</p><h1 id="history-title">Historial</h1><p class="help">Las rondas completadas se guardan en este navegador.</p></div>
+      <div class="history-filters">
+        <label for="history-mode">Modo<select id="history-mode"><option value="all">Todos los modos</option></select></label>
+        <label for="history-duration">Duración<select id="history-duration"><option value="all">Todas las duraciones</option></select></label>
+        <label for="history-period">Período<select id="history-period"><option value="all">Todo el historial</option><option value="week">Últimos 7 días</option><option value="prior-week">Hace una semana · 7–13 días</option><option value="month">Mes pasado</option></select></label>
+      </div>
+      <div id="history-summary" class="history-summary" hidden></div>
+      <div class="panel history-panel">
+        <div class="row"><h2>Rondas guardadas</h2><span id="history-count" class="tag"></span></div>
+        <div id="history-table"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="shell"><span>PUNTO CERO</span><span>Ratón para apuntar · Clic izquierdo para disparar · Clic derecho para ADS</span></div></footer>
+  <div id="notice" class="notice" role="status" hidden></div>
+  <noscript><p class="shell">Activa JavaScript en tu navegador para jugar.</p></noscript>
+<script>
+(() => {
+  "use strict";
+
+  const MODES = {
+    bots: { name: "Bots", icon: "bot", short: "Vida, movimiento y saltos", description: "Entrena contra un bot que puedes hacer moverse, saltar y resistir varios impactos." },
+    balls: { name: "Tres bolas", icon: "balls", short: "Tres objetivos siempre al frente", description: "Siempre hay tres bolas en la zona frontal. Cada acierto repone una al instante." },
+    tracking: { name: "Tracking", icon: "tracking", short: "Un bot con velocidad variable", description: "Mantén la mira sobre un bot indestructible. Se mueve de lado a lado y cambia de velocidad." },
+    flicks: { name: "Flicks", icon: "flicks", short: "Objetivos sorpresa", description: "La ronda empieza vacía. Tras una pausa aparece un objetivo al frente. Cada acierto da paso a otra espera y a una posición aleatoria distinta." },
+  };
+  const DIRECTIONS = { left: [-1, 0], right: [1, 0], forward: [0, -1], back: [0, 1] };
+  const DEFAULTS = {
+    mode: "bots", duration: 60, health: 100, directions: ["left", "right"], jump: false, width: 100, ballSize: 100, flickSize: 100,
+    normal: 1, ads: 0.65,
+    crosshair: { style: "static", color: "#8deaff", length: 8, thickness: 2, gap: 5, opacity: 100, outline: true, outlineWidth: 1, dot: false, tShape: false },
+  };
+  const RANGES = {
+    duration: [5, 1800], health: [1, 1000], width: [40, 180], ballSize: [40, 160], flickSize: [40, 160],
+    normal: [0.05, 5], ads: [0.05, 5],
+    length: [2, 26], thickness: [1, 8], gap: [0, 24], opacity: [15, 100], outlineWidth: [1, 4],
+  };
+  const HISTORY_PREFIX = "puntocero.round.";
+  const SETTINGS_KEY = "puntocero.settings";
+  const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+  const has = (object, key) => Object.hasOwn(object, key);
+
+  function numberSetting(key, value, fallback) {
+    const parsed = typeof value === "string" && value.trim() ? Number(value) : value;
+    if (!Number.isFinite(parsed)) return fallback;
+    return clamp(key === "normal" || key === "ads" ? parsed : Math.round(parsed), ...RANGES[key]);
+  }
+
+  function settingsFrom(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const settings = { ...DEFAULTS };
+    for (const key of ["duration", "health", "width", "ballSize", "flickSize", "normal", "ads"]) {
+      settings[key] = numberSetting(key, source[key], DEFAULTS[key]);
+    }
+    settings.mode = has(MODES, source.mode) ? source.mode : DEFAULTS.mode;
+    settings.directions = Object.keys(DIRECTIONS).filter((key) => (Array.isArray(source.directions) ? source.directions : DEFAULTS.directions).includes(key));
+    settings.jump = source.jump === true;
+    settings.crosshair = { ...DEFAULTS.crosshair };
+    const crosshair = source.crosshair && typeof source.crosshair === "object" ? source.crosshair : {};
+    if (["static", "dynamic", "dot"].includes(crosshair.style)) settings.crosshair.style = crosshair.style;
+    if (typeof crosshair.color === "string" && /^#[a-f0-9]{6}$/i.test(crosshair.color)) settings.crosshair.color = crosshair.color;
+    for (const key of ["length", "thickness", "gap", "opacity", "outlineWidth"]) {
+      settings.crosshair[key] = numberSetting(key, crosshair[key], DEFAULTS.crosshair[key]);
+    }
+    for (const key of ["outline", "dot", "tShape"]) {
+      if (typeof crosshair[key] === "boolean") settings.crosshair[key] = crosshair[key];
+    }
+    return settings;
+  }
+
+  function roundConfig(settings) {
+    const { mode, duration, health, directions, jump, width, ballSize, flickSize } = settingsFrom(settings);
+    return { mode, duration, health, directions, jump, width, ballSize, flickSize };
+  }
+
+  function configKey(settings) {
+    const { mode, duration, health, directions, jump, width, ballSize, flickSize } = roundConfig(settings);
+    if (mode === "bots") return [mode, duration, health, directions.join(","), jump].join("/");
+    if (mode === "tracking") return [mode, duration, width].join("/");
+    return [mode, duration, mode === "balls" ? ballSize : flickSize].join("/");
+  }
+
+  class Round {
+    constructor(settings, random = Math.random) {
+      this.config = roundConfig(settings);
+      this.random = random;
+      this.elapsed = 0;
+      this.shots = 0;
+      this.hits = 0;
+      this.eliminated = 0;
+      this.reaction = 0;
+      this.tracked = 0;
+      this.streak = 0;
+      this.bestStreak = 0;
+      this.targets = [];
+      this.nextSpawn = Infinity;
+      this.previousSpot = null;
+      this.nextId = 1;
+      if (this.config.mode === "balls") {
+        for (let index = 0; index < 3; index += 1) this.spawnOrb();
+      } else if (this.config.mode === "flicks") {
+        this.scheduleFlick();
+      } else {
+        this.spawnBot();
+      }
+    }
+
+    between(low, high) {
+      return low + (high - low) * this.random();
+    }
+
+    get remaining() {
+      return Math.max(0, this.config.duration - this.elapsed);
+    }
+
+    scheduleFlick() {
+      this.nextSpawn = this.elapsed + this.between(0.7, 1.75);
+    }
+
+    spawnOrb() {
+      const spots = this.previousSpot ? [...this.targets, this.previousSpot] : this.targets;
+      const radius = 0.32 * (this.config.mode === "balls" ? this.config.ballSize : this.config.flickSize) / 100;
+      const separation = Math.max(1, 2 * radius + 0.12);
+      const available = (x, y) => spots.every((target) => Math.hypot(target.x - x, target.y - y) >= separation);
+      let x;
+      let y;
+      for (let attempt = 0; attempt < 24; attempt += 1) {
+        x = this.between(-4.15, 4.15);
+        y = this.between(0.85, 3.55);
+        if (available(x, y)) break;
+      }
+      if (!available(x, y)) {
+        const grid = [1, 2.2, 3.4].flatMap((row) => [-4, -2, 0, 2, 4].map((column) => [column, row]));
+        [x, y] = grid.find(([column, row]) => available(column, row));
+      }
+      this.targets.push({ id: this.nextId++, kind: "orb", x, y, z: 8.4, radius, spawned: this.elapsed });
+    }
+
+    spawnBot() {
+      const tracking = this.config.mode === "tracking";
+      this.targets = [{
+        id: this.nextId++, kind: "bot", x: this.between(-2.7, 2.7), y: 0, z: 8,
+        width: tracking ? this.config.width / 100 : 1, hp: this.config.health, maxHp: this.config.health,
+        speed: this.between(2, 4), targetSpeed: this.between(2, 5.8),
+        side: this.random() < 0.5 ? -1 : 1, direction: null, changeAt: this.elapsed,
+        jumpAt: this.elapsed + this.between(0.55, 1.35), landAt: -1,
+      }];
+    }
+
+    moveBot(bot, dt) {
+      if (this.config.mode === "tracking") {
+        if (this.elapsed >= bot.changeAt) {
+          bot.targetSpeed = this.between(1.4, 6.3);
+          bot.changeAt = this.elapsed + this.between(0.5, 1.45);
+        }
+        bot.speed += (bot.targetSpeed - bot.speed) * Math.min(1, dt * 6);
+        bot.x += bot.side * bot.speed * dt;
+        if (Math.abs(bot.x) > 4.8) {
+          bot.x = Math.sign(bot.x) * (9.6 - Math.abs(bot.x));
+          bot.side *= -1;
+        }
+        return;
+      }
+
+      const directions = this.config.directions;
+      if (directions.length && this.elapsed >= bot.changeAt) {
+        bot.direction = directions[Math.floor(this.random() * directions.length)];
+        bot.changeAt = this.elapsed + this.between(0.42, 1.4);
+      }
+      if (bot.direction) {
+        const [x, z] = DIRECTIONS[bot.direction];
+        const axis = x ? "x" : "z";
+        const [low, high] = x ? [-4.65, 4.65] : [5.7, 11.4];
+        bot[axis] += (x || z) * 3.3 * dt;
+        if (bot[axis] < low || bot[axis] > high) {
+          const opposite = { left: "right", right: "left", forward: "back", back: "forward" }[bot.direction];
+          if (directions.includes(opposite)) {
+            bot[axis] = clamp(bot[axis], low, high);
+            bot.direction = opposite;
+          } else {
+            bot[axis] += bot[axis] < low ? high - low : low - high;
+          }
+        }
+      }
+      if (this.config.jump && this.elapsed >= bot.jumpAt) {
+        bot.landAt = this.elapsed + 0.66;
+        bot.jumpAt = bot.landAt + this.between(0.7, 1.85);
+      }
+      const air = (bot.landAt - this.elapsed) / 0.66;
+      bot.y = air > 0 ? 4 * air * (1 - air) * 0.95 : 0;
+    }
+
+    tick(seconds, isTracking) {
+      let left = Math.min(Math.max(0, seconds), this.remaining);
+      while (left > 0.000001) {
+        const dt = Math.min(left, 1 / 90);
+        left -= dt;
+        this.elapsed = Math.min(this.config.duration, this.elapsed + dt);
+        if (this.config.mode === "flicks" && this.elapsed >= this.nextSpawn) {
+          this.spawnOrb();
+          this.nextSpawn = Infinity;
+        }
+        const bot = this.targets[0];
+        if (bot?.kind === "bot") this.moveBot(bot, dt);
+        if (this.config.mode === "tracking") {
+          if (isTracking(bot)) {
+            this.tracked += dt;
+            this.streak += dt;
+            this.bestStreak = Math.max(this.bestStreak, this.streak);
+          } else {
+            this.streak = 0;
+          }
+        }
+      }
+      if (this.remaining < 0.000001) this.elapsed = this.config.duration;
+    }
+
+    shoot(targetId) {
+      if (!this.remaining || this.config.mode === "tracking") return "ignored";
+      this.shots += 1;
+      const target = this.targets.find((item) => item.id === targetId);
+      if (!target) return "miss";
+      this.hits += 1;
+      if (target.kind === "bot") {
+        target.hp = Math.max(0, target.hp - 25);
+        if (target.hp) return "hit";
+        this.spawnBot();
+      } else {
+        this.reaction += (this.elapsed - target.spawned) * 1000;
+        this.previousSpot = target;
+        this.targets = this.targets.filter((item) => item !== target);
+        if (this.config.mode === "balls") this.spawnOrb();
+        else this.scheduleFlick();
+      }
+      this.eliminated += 1;
+      return "eliminated";
+    }
+
+    result() {
+      const accuracy = this.shots ? this.hits / this.shots : 0;
+      const onTarget = this.elapsed ? clamp(this.tracked / this.elapsed, 0, 1) : 0;
+      const reactionMs = this.eliminated ? this.reaction / this.eliminated : null;
+      const points = this.config.mode === "tracking"
+        ? Math.round(onTarget * 10000)
+        : Math.round((this.eliminated * 100 + (this.config.mode === "bots" ? this.hits * 12 : 0)) * (0.6 + 0.4 * accuracy));
+      return {
+        ...this.config, points, accuracy, onTarget, reactionMs,
+        shots: this.shots, hits: this.hits, eliminated: this.eliminated,
+        tracked: this.tracked, bestStreak: this.bestStreak,
+      };
+    }
+  }
+
+  function periodRange(period, now = new Date()) {
+    const { year, month, day } = { year: now.getFullYear(), month: now.getMonth(), day: now.getDate() };
+    const midnight = (offset) => new Date(year, month, day + offset).getTime();
+    if (period === "week") return [midnight(-6), midnight(1)];
+    if (period === "prior-week") return [midnight(-13), midnight(-6)];
+    if (period === "month") return [new Date(year, month - 1, 1).getTime(), new Date(year, month, 1).getTime()];
+    if (/^\d{4}-\d{2}$/.test(period)) {
+      const [selectedYear, selectedMonth] = period.split("-").map(Number);
+      return [new Date(selectedYear, selectedMonth - 1, 1).getTime(), new Date(selectedYear, selectedMonth, 1).getTime()];
+    }
+    return [-Infinity, Infinity];
+  }
+
+  function inPeriod(record, period, now) {
+    const [start, end] = periodRange(period, now);
+    return record.date >= start && record.date < end;
+  }
+
+  function readHistory(storage) {
+    const records = [];
+    try {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (!key?.startsWith(HISTORY_PREFIX)) continue;
+        try {
+          const record = JSON.parse(storage.getItem(key));
+          if (record && has(MODES, record.mode) && Number.isFinite(record.date) && Number.isFinite(record.points) && Number.isFinite(record.duration)) records.push(record);
+        } catch {
+          // A damaged entry leaves the rest of the history available.
+        }
+      }
+    } catch {
+      return [];
+    }
+    return records.sort((first, second) => second.date - first.date);
+  }
+
+  function saveRound(storage, record) {
+    try {
+      storage.setItem(HISTORY_PREFIX + record.id, JSON.stringify(record));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  window.PuntoCeroCore = { MODES, DIRECTIONS, DEFAULTS, RANGES, HISTORY_PREFIX, SETTINGS_KEY, clamp, settingsFrom, configKey, Round, inPeriod, readHistory, saveRound };
+})();
+</script>
+<script>
+(() => {
+  "use strict";
+  const { clamp } = window.PuntoCeroCore;
+  const NEAR = 0.15;
+  const LEFT = -8;
+  const RIGHT = 8;
+  const BACK = -3;
+  const FRONT = 13;
+  const CEILING = 5.6;
+
+  const plane = (a, b, c, d, top, bottom, grid) => ({ corners: [a, b, c, d], top, bottom, grid });
+  const verticalGrid = (start, end, point) => [
+    ...Array.from({ length: end - start - 1 }, (_, index) => [point(start + index + 1, 0), point(start + index + 1, CEILING)]),
+    ...[0.8, 1.6, 2.4, 3.2, 4, 4.8].map((height) => [point(start, height), point(end, height)]),
+  ];
+  const horizontalGrid = (y) => [
+    ...Array.from({ length: RIGHT - LEFT - 1 }, (_, index) => [[LEFT + index + 1, y, BACK], [LEFT + index + 1, y, FRONT]]),
+    ...Array.from({ length: FRONT - BACK - 1 }, (_, index) => [[LEFT, y, BACK + index + 1], [RIGHT, y, BACK + index + 1]]),
+  ];
+  const floorCorners = (y) => [[LEFT, y, BACK], [RIGHT, y, BACK], [RIGHT, y, FRONT], [LEFT, y, FRONT]];
+  const wallX = (x, top, bottom) => plane([x, 0, BACK], [x, 0, FRONT], [x, CEILING, FRONT], [x, CEILING, BACK], top, bottom, verticalGrid(BACK, FRONT, (z, y) => [x, y, z]));
+  const wallZ = (z, top, bottom) => plane([LEFT, 0, z], [RIGHT, 0, z], [RIGHT, CEILING, z], [LEFT, CEILING, z], top, bottom, verticalGrid(LEFT, RIGHT, (x, y) => [x, y, z]));
+  const surfaces = [
+    plane(...floorCorners(CEILING), "#171f3a", "#222b4d", horizontalGrid(CEILING)),
+    wallZ(BACK, "#232b52", "#27375f"),
+    wallZ(FRONT, "#394775", "#28375b"),
+    wallX(LEFT, "#253358", "#1f2b4c"),
+    wallX(RIGHT, "#2b375e", "#253157"),
+    plane(...floorCorners(0), "#34456d", "#1c2646", horizontalGrid(0)),
+  ];
+  const trainingLines = [
+    [[-5.3, 0.006, 5], [5.3, 0.006, 5]],
+    [[-5.3, 0.006, 5], [-5.3, 0.006, 12]],
+    [[5.3, 0.006, 5], [5.3, 0.006, 12]],
+    [[-5.3, 0.006, 12], [5.3, 0.006, 12]],
+  ];
+
+  function crosshair(context, x, y, settings, bloom = 0) {
+    const { thickness, length, dot, outline, outlineWidth, tShape, color, opacity, style } = settings;
+    const half = thickness / 2;
+    const gap = settings.gap + (style === "dynamic" ? bloom : 0);
+    const pieces = [];
+    if (style !== "dot") {
+      pieces.push([-gap - length, -half, length, thickness], [gap, -half, length, thickness], [-half, gap, thickness, length]);
+      if (!tShape) pieces.push([-half, -gap - length, thickness, length]);
+    }
+    if (dot || style === "dot") pieces.push([-half, -half, thickness, thickness]);
+    context.save();
+    context.globalAlpha = opacity / 100;
+    if (outline) {
+      context.fillStyle = "#080c16";
+      for (const [left, top, width, height] of pieces) context.fillRect(x + left - outlineWidth, y + top - outlineWidth, width + 2 * outlineWidth, height + 2 * outlineWidth);
+    }
+    context.fillStyle = color;
+    for (const [left, top, width, height] of pieces) context.fillRect(x + left, y + top, width, height);
+    context.restore();
+  }
+
+  function clipIntersection(first, second) {
+    const amount = (NEAR - first.z) / (second.z - first.z);
+    return { x: first.x + (second.x - first.x) * amount, y: first.y + (second.y - first.y) * amount, z: NEAR };
+  }
+
+  function clipPolygon(corners) {
+    const output = [];
+    let previous = corners[corners.length - 1];
+    for (const current of corners) {
+      const visible = current.z >= NEAR;
+      if (visible !== (previous.z >= NEAR)) output.push(clipIntersection(previous, current));
+      if (visible) output.push(current);
+      previous = current;
+    }
+    return output;
+  }
+
+  class Arena {
+    constructor(canvas) {
+      this.canvas = canvas;
+      this.context = canvas.getContext("2d", { alpha: false });
+      this.width = 0;
+      this.height = 0;
+      this.dpr = 1;
+      this.reset();
+    }
+
+    reset() {
+      this.yaw = 0;
+      this.pitch = 0;
+      this.zoom = 0;
+      this.updateProjection();
+    }
+
+    resize() {
+      const width = this.canvas.clientWidth;
+      const height = this.canvas.clientHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      if (!width || !height || (this.width === width && this.height === height && this.dpr === dpr)) return;
+      this.width = width;
+      this.height = height;
+      this.dpr = dpr;
+      this.canvas.width = Math.round(width * dpr);
+      this.canvas.height = Math.round(height * dpr);
+      this.context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.updateProjection();
+    }
+
+    updateProjection() {
+      this.sinYaw = Math.sin(this.yaw);
+      this.cosYaw = Math.cos(this.yaw);
+      this.sinPitch = Math.sin(this.pitch);
+      this.cosPitch = Math.cos(this.pitch);
+      const vertical = (54 - 16 * this.zoom) * Math.PI / 360;
+      const horizontal = (64 - 18 * this.zoom) * Math.PI / 360;
+      this.focal = Math.min(this.height / (2 * Math.tan(vertical)), this.width / (2 * Math.tan(horizontal)));
+    }
+
+    look(dx, dy, sensitivity) {
+      this.yaw = (this.yaw + dx * 0.0023 * sensitivity) % (2 * Math.PI);
+      this.pitch = clamp(this.pitch - dy * 0.0023 * sensitivity, -1.44, 1.44);
+      this.updateProjection();
+    }
+
+    setZoom(amount) {
+      this.zoom = amount;
+      this.updateProjection();
+    }
+
+    cameraPoint([x, y, z]) {
+      const forward = this.sinYaw * x + this.cosYaw * z;
+      const up = y - 1.65;
+      return {
+        x: this.cosYaw * x - this.sinYaw * z,
+        y: this.cosPitch * up - this.sinPitch * forward,
+        z: this.sinPitch * up + this.cosPitch * forward,
+      };
+    }
+
+    screenPoint(point) {
+      const scale = this.focal / point.z;
+      return { x: this.width / 2 + point.x * scale, y: this.height / 2 - point.y * scale, scale };
+    }
+
+    project(world) {
+      const point = this.cameraPoint(world);
+      return point.z >= NEAR ? this.screenPoint(point) : null;
+    }
+
+    roomLine([start, end]) {
+      let first = this.cameraPoint(start);
+      let second = this.cameraPoint(end);
+      if (first.z < NEAR && second.z < NEAR) return;
+      if (first.z < NEAR) first = clipIntersection(first, second);
+      if (second.z < NEAR) second = clipIntersection(second, first);
+      const a = this.screenPoint(first);
+      const b = this.screenPoint(second);
+      this.context.moveTo(a.x, a.y);
+      this.context.lineTo(b.x, b.y);
+    }
+
+    room() {
+      const context = this.context;
+      context.fillStyle = "#151c36";
+      context.fillRect(0, 0, this.width, this.height);
+      for (const surface of surfaces) {
+        const polygon = clipPolygon(surface.corners.map((corner) => this.cameraPoint(corner)));
+        if (polygon.length < 3) continue;
+        const fill = context.createLinearGradient(0, 0, 0, this.height);
+        fill.addColorStop(0, surface.top);
+        fill.addColorStop(1, surface.bottom);
+        context.fillStyle = fill;
+        context.beginPath();
+        polygon.forEach((vertex, index) => {
+          const { x, y } = this.screenPoint(vertex);
+          if (!index) context.moveTo(x, y);
+          else context.lineTo(x, y);
+        });
+        context.closePath();
+        context.fill();
+        context.strokeStyle = "#93a4ec35";
+        context.lineWidth = 1;
+        context.stroke();
+        context.beginPath();
+        for (const line of surface.grid) this.roomLine(line);
+        context.strokeStyle = "#9aaced29";
+        context.stroke();
+      }
+      context.beginPath();
+      for (const line of trainingLines) this.roomLine(line);
+      context.lineWidth = 1.25;
+      context.strokeStyle = "#91d9ff55";
+      context.stroke();
+    }
+
+    targetShape(target) {
+      if (!target) return null;
+      const { x, y, z } = target;
+      if (target.kind === "orb") {
+        const center = this.project([x, y, z]);
+        if (!center) return null;
+        const radius = Math.max(2.3, target.radius * center.scale);
+        return [{ x: center.x, y: center.y, rx: radius, ry: radius, part: "orb" }];
+      }
+      const head = this.project([x, y + 1.51, z]);
+      const chest = this.project([x, y + 0.68, z]);
+      const top = this.project([x, y + 1.34, z]);
+      const bottom = this.project([x, y + 0.02, z]);
+      if (!head || !chest || !top || !bottom) return null;
+      return [
+        { x: chest.x, y: chest.y, rx: Math.max(2.5, 0.39 * target.width * chest.scale), ry: Math.max(2.5, Math.abs(bottom.y - top.y) / 2), part: "body" },
+        { x: head.x, y: head.y, rx: Math.max(2.5, 0.25 * target.width * head.scale), ry: Math.max(2.5, 0.26 * head.scale), part: "head" },
+      ];
+    }
+
+    isHit(target, point) {
+      if (!point) return false;
+      return this.targetShape(target)?.some((part) => ((point.x - part.x) / part.rx) ** 2 + ((point.y - part.y) / part.ry) ** 2 <= 1) || false;
+    }
+
+    hitTarget(targets, point) {
+      return [...targets].sort((first, second) => this.cameraPoint([first.x, first.y, first.z]).z - this.cameraPoint([second.x, second.y, second.z]).z)
+        .find((target) => this.isHit(target, point));
+    }
+
+    drawTarget(target, showHealth, highlight) {
+      const shapes = this.targetShape(target);
+      if (!shapes) return;
+      const context = this.context;
+      const shadow = this.project([target.x, 0.02, target.z]);
+      if (shadow) {
+        context.fillStyle = "#080e2265";
+        context.beginPath();
+        context.ellipse(shadow.x, shadow.y, Math.max(2, 0.38 * shadow.scale), Math.max(1, 0.1 * shadow.scale), 0, 0, 2 * Math.PI);
+        context.fill();
+      }
+      for (const { x, y, rx, ry } of shapes) {
+        const radius = Math.max(rx, ry);
+        const fill = context.createRadialGradient(x - rx * 0.35, y - ry * 0.37, 0, x, y, radius * 1.14);
+        fill.addColorStop(0, "#ffebd6");
+        fill.addColorStop(0.37, highlight ? "#ffd080" : "#ff9b87");
+        fill.addColorStop(0.68, "#ff766e");
+        fill.addColorStop(1, "#b7355d");
+        context.beginPath();
+        context.ellipse(x, y, rx, ry, 0, 0, 2 * Math.PI);
+        context.fillStyle = fill;
+        context.fill();
+        context.lineWidth = 1;
+        context.strokeStyle = "#ffc5a985";
+        context.stroke();
+      }
+      if (showHealth && target.kind === "bot") {
+        const head = shapes[1];
+        const width = Math.max(20, shapes[0].rx * 2.15);
+        const left = head.x - width / 2;
+        const y = head.y - head.ry - 9;
+        context.fillStyle = "#0b1126";
+        context.fillRect(left - 1, y - 1, width + 2, 5);
+        context.fillStyle = "#8deaff";
+        context.fillRect(left, y, width * target.hp / target.maxHp, 3);
+      }
+    }
+
+    render({ targets = [], aim = null, settings = null, bloom = 0, flash = 0, hit = false, health = false, tracking = false } = {}) {
+      if (!this.width || !this.height) return;
+      this.room();
+      for (const target of [...targets].sort((first, second) => this.cameraPoint([second.x, second.y, second.z]).z - this.cameraPoint([first.x, first.y, first.z]).z)) {
+        this.drawTarget(target, health, tracking && this.isHit(target, aim));
+      }
+      if (!aim || !settings) return;
+      crosshair(this.context, aim.x, aim.y, settings, bloom);
+      if (flash > 0 && hit) {
+        this.context.save();
+        this.context.globalAlpha = Math.min(1, flash * 9);
+        this.context.strokeStyle = "#fff2df";
+        this.context.lineWidth = 1.3;
+        this.context.beginPath();
+        for (const dx of [-1, 1]) {
+          for (const dy of [-1, 1]) {
+            this.context.moveTo(aim.x + 8 * dx, aim.y + 8 * dy);
+            this.context.lineTo(aim.x + 12 * dx, aim.y + 12 * dy);
+          }
+        }
+        this.context.stroke();
+        this.context.restore();
+      }
+    }
+  }
+
+  window.PuntoCeroArena = Arena;
+})();
+</script>
+<script>
+(() => {
+  "use strict";
+  const Core = window.PuntoCeroCore;
+  const { MODES, DEFAULTS, SETTINGS_KEY, HISTORY_PREFIX, clamp, settingsFrom, configKey, Round, inPeriod, readHistory, saveRound } = Core;
+  const Arena = window.PuntoCeroArena;
+  const by = (id) => document.getElementById(id);
+  const all = (selector) => [...document.querySelectorAll(selector)];
+  const integers = new Intl.NumberFormat("es-ES", { useGrouping: "always", maximumFractionDigits: 0 });
+  const decimals = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const percentages = new Intl.NumberFormat("es-ES", { style: "percent", maximumFractionDigits: 1 });
+  const seconds = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 });
+  const dates = new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: "short" });
+  const months = new Intl.DateTimeFormat("es-ES", { month: "long", year: "numeric" });
+  const gameCanvas = by("game-canvas");
+  const arena = new Arena(gameCanvas);
+  const modePreview = new Arena(by("mode-preview"));
+  const sightPreview = new Arena(by("crosshair-preview"));
+  const directionControls = all('[name="direction"]');
+  const crosshairFields = {
+    length: ["Longitud", 2, 26, "px"], thickness: ["Grosor", 1, 8, "px"], gap: ["Separación", 0, 24, "px"],
+    opacity: ["Opacidad", 15, 100, "%"], outlineWidth: ["Grosor del contorno", 1, 4, "px"],
+  };
+  const icons = {
+    bot: '<rect x="5" y="7" width="14" height="12" rx="3"/><path d="M12 7V4m-3 8h.1m5.9 0h.1M9 16h6"/>',
+    balls: '<circle cx="7" cy="7" r="2.8"/><circle cx="17" cy="9" r="2.8"/><circle cx="11" cy="17" r="2.8"/>',
+    tracking: '<path d="M3 12h18M3 12l4-4m-4 4 4 4m14-4-4-4m4 4-4 4"/><circle cx="12" cy="12" r="2.8" fill="#30284d"/>',
+    flicks: '<path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="1.1"/>',
+  };
+  const game = {
+    round: null, phase: "menu", beforePause: "countdown", countdown: 3, at: 0, frame: 0,
+    locked: false, pointer: null, ads: false, bloom: 0, flash: 0, hit: false,
+  };
+  let storage;
+  try { storage = window.localStorage; } catch { storage = undefined; }
+  let settings = settingsFrom(readSettings());
+  let history = readHistory(storage);
+  let view = "home";
+  let settingsReturn = "home";
+  let lastResult = null;
+  let noticeTimer = 0;
+  let previewAnimation = 0;
+
+  function readSettings() {
+    try { return JSON.parse(storage?.getItem(SETTINGS_KEY)); } catch { return null; }
+  }
+
+  function storeSettings() {
+    try { storage?.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {
+      notice("El navegador no pudo guardar los ajustes.");
+    }
+  }
+
+  function notice(text) {
+    window.clearTimeout(noticeTimer);
+    setText("notice", text);
+    by("notice").hidden = false;
+    noticeTimer = window.setTimeout(() => { by("notice").hidden = true; }, 3900);
+  }
+
+  function setText(id, text) {
+    const element = by(id);
+    if (element.textContent !== String(text)) element.textContent = text;
+  }
+
+  function formatTime(value) {
+    const whole = Math.max(0, Math.ceil(value));
+    return [Math.floor(whole / 60), whole % 60].map((part) => String(part).padStart(2, "0")).join(":");
+  }
+
+  function shortSeconds(value) {
+    return seconds.format(value) + " s";
+  }
+
+  function show(next, focus = true) {
+    view = next;
+    document.body.dataset.view = next;
+    all("[data-screen]").forEach((section) => { section.hidden = section.dataset.screen !== next; });
+    all("nav [data-go]").forEach((button) => {
+      if (button.dataset.go === next) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    });
+    if (next !== "arena") window.scrollTo(0, 0);
+    if (next === "home") renderHome();
+    if (next === "setup") renderSetup();
+    if (next === "settings") renderSettings();
+    if (next === "history") renderHistory();
+    if (next === "arena") {
+      arena.resize();
+      renderArenaUi();
+      drawGame();
+    }
+    if (focus && next !== "arena") {
+      const heading = document.querySelector('[data-screen="' + next + '"] h1');
+      heading.setAttribute("tabindex", "-1");
+      heading.focus({ preventScroll: true });
+    }
+  }
+
+  function renderHome() {
+    history = readHistory(storage);
+    const recent = history[0];
+    by("home-last").hidden = !recent;
+    if (recent) setText("home-last-label", MODES[recent.mode].name + " · " + integers.format(recent.points) + " puntos");
+  }
+
+  function orbSetting() {
+    return settings.mode === "flicks" ? "flickSize" : "ballSize";
+  }
+
+  function renderSetup() {
+    by("duration").value = settings.duration;
+    by("health").value = settings.health;
+    by("width").value = settings.width;
+    by("orb-size").value = settings[orbSetting()];
+    setText("width-value", settings.width + " %");
+    setText("orb-size-value", settings[orbSetting()] + " %");
+    by("jump").checked = settings.jump;
+    directionControls.forEach((control) => { control.checked = settings.directions.includes(control.value); });
+    all("[data-pick]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.pick === settings.mode)));
+    all("[data-options]").forEach((section) => {
+      const orbs = settings.mode === "balls" || settings.mode === "flicks";
+      section.hidden = section.dataset.options === "orbs" ? !orbs : section.dataset.options !== settings.mode;
+    });
+    by("health").disabled = settings.mode !== "bots";
+    setText("mode-name", MODES[settings.mode].name);
+    setText("mode-description", MODES[settings.mode].description);
+    drawModePreview();
+  }
+
+  function drawModePreview() {
+    if (view !== "setup") return;
+    modePreview.resize();
+    let seed = 713;
+    const random = () => {
+      seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+    const sample = new Round(settings, random);
+    if (settings.mode === "flicks") sample.tick(1.8);
+    modePreview.render({ targets: sample.targets, health: settings.mode === "bots" });
+  }
+
+  function renderSettings() {
+    for (const name of ["normal", "ads"]) {
+      by(name).value = settings[name];
+      setText(name + "-value", decimals.format(settings[name]));
+    }
+    all("[data-crosshair]").forEach((control) => {
+      const value = settings.crosshair[control.dataset.crosshair];
+      if (control.type === "checkbox") control.checked = value;
+      else control.value = value;
+    });
+    updateCrosshairEditor();
+    drawSightPreview();
+  }
+
+  function updateCrosshairEditor() {
+    const current = settings.crosshair;
+    for (const [key, entry] of Object.entries(crosshairFields)) setText("crosshair-" + key + "-value", current[key] + " " + entry[3]);
+    for (const key of ["length", "gap", "tShape", "dot"]) {
+      document.querySelector('[data-crosshair="' + key + '"]').disabled = current.style === "dot";
+    }
+    by("crosshair-outlineWidth").disabled = !current.outline;
+  }
+
+  function drawSightPreview(bloom = 0) {
+    if (view !== "settings") return;
+    sightPreview.resize();
+    sightPreview.render({
+      targets: [{ id: 0, kind: "orb", x: 1.7, y: 2.25, z: 8.4, radius: 0.45 }],
+      aim: { x: sightPreview.width / 2, y: sightPreview.height / 2 },
+      settings: settings.crosshair, bloom, flash: bloom / 72, hit: true,
+    });
+  }
+
+  function configureMenus() {
+    by("home-modes").innerHTML = Object.entries(MODES).map(([key, mode]) =>
+      '<button type="button" class="mode-card" data-select-mode="' + key + '"><span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24">' + icons[mode.icon] + '</svg></span><strong>' + mode.name + '</strong><span class="help">' + mode.short + '</span></button>'
+    ).join("");
+    by("mode-picker").innerHTML = Object.entries(MODES).map(([key, mode]) =>
+      '<button class="button secondary" type="button" data-pick="' + key + '">' + mode.name + '</button>'
+    ).join("");
+    by("crosshair-ranges").innerHTML = Object.entries(crosshairFields).map(([key, [name, min, max]]) =>
+      '<div><div class="row"><label for="crosshair-' + key + '">' + name + '</label><output for="crosshair-' + key + '" id="crosshair-' + key + '-value"></output></div><input type="range" id="crosshair-' + key + '" data-crosshair="' + key + '" min="' + min + '" max="' + max + '" step="1"></div>'
+    ).join("");
+    for (const [key, mode] of Object.entries(MODES)) by("history-mode").add(new Option(mode.name, key));
+  }
+
+  function setMode(mode) {
+    settings.mode = mode;
+    storeSettings();
+    renderSetup();
+  }
+
+  function currentAim() {
+    if (game.locked) return { x: arena.width / 2, y: arena.height / 2 };
+    return game.pointer;
+  }
+
+  function drawGame() {
+    if (view !== "arena" || !game.round) return;
+    const live = game.phase === "running" || (game.phase === "paused" && game.beforePause === "running");
+    arena.render({
+      targets: live ? game.round.targets : [],
+      aim: live ? currentAim() || { x: arena.width / 2, y: arena.height / 2 } : null,
+      settings: settings.crosshair, bloom: game.bloom, flash: game.flash, hit: game.hit,
+      health: game.round.config.mode === "bots", tracking: game.round.config.mode === "tracking",
+    });
+  }
+
+  function renderArenaUi() {
+    if (!game.round) return;
+    const paused = game.phase === "paused";
+    const countdown = game.phase === "countdown";
+    const tracking = game.round.config.mode === "tracking";
+    by("countdown-overlay").hidden = !countdown;
+    by("pause-overlay").hidden = !paused;
+    by("pause-button").hidden = paused;
+    gameCanvas.inert = paused;
+    by("arena-tip").hidden = paused || game.locked || game.phase !== "running";
+    setText("arena-tip", tracking ? "Mueve la mira sobre el bot para sumar tiempo en objetivo." : "Mueve la mira sobre el objetivo y haz clic para disparar.");
+    setText("hud-mode", MODES[game.round.config.mode].name);
+    setText("timer", formatTime(game.round.remaining));
+    setText("countdown-number", Math.max(1, Math.ceil(game.countdown)));
+    setText("hud-stat", countdown ? "" : tracking ? shortSeconds(game.round.tracked) + " en objetivo" : game.round.eliminated + (game.round.eliminated === 1 ? " eliminado" : " eliminados"));
+  }
+
+  function activeRound() {
+    return game.phase === "countdown" || game.phase === "running";
+  }
+
+  function releasePointer() {
+    if (document.pointerLockElement === gameCanvas) document.exitPointerLock?.();
+  }
+
+  function capturePointer() {
+    if (!gameCanvas.requestPointerLock || !window.matchMedia("(any-pointer: fine)").matches) return;
+    try {
+      const request = gameCanvas.requestPointerLock();
+      if (request) request.catch(() => renderArenaUi());
+    } catch {
+      renderArenaUi();
+    }
+  }
+
+  function startRound(configuration) {
+    stopFrame();
+    game.round = new Round(configuration);
+    game.phase = "countdown";
+    game.beforePause = "countdown";
+    game.countdown = 3;
+    game.at = performance.now();
+    game.pointer = null;
+    game.ads = false;
+    game.bloom = 0;
+    game.flash = 0;
+    arena.reset();
+    show("arena", false);
+    gameCanvas.focus({ preventScroll: true });
+    capturePointer();
+    requestFrame();
+  }
+
+  function stopFrame() {
+    if (game.frame) window.cancelAnimationFrame(game.frame);
+    game.frame = 0;
+  }
+
+  function requestFrame() {
+    if (!game.frame && activeRound()) game.frame = window.requestAnimationFrame(frame);
+  }
+
+  function frame(now) {
+    game.frame = 0;
+    advance(now);
+    if (!activeRound()) return;
+    arena.resize();
+    renderArenaUi();
+    drawGame();
+    requestFrame();
+  }
+
+  function advance(now) {
+    if (!activeRound()) return;
+    let dt = Math.max(0, (now - game.at) / 1000);
+    game.at = Math.max(game.at, now);
+    game.flash = Math.max(0, game.flash - dt);
+    game.bloom = Math.max(0, game.bloom - dt * 19);
+    if (game.phase === "countdown") {
+      game.countdown -= dt;
+      if (game.countdown > 0) return;
+      dt = -game.countdown;
+      game.phase = "running";
+    }
+    game.round.tick(dt, (target) => arena.isHit(target, currentAim()));
+    if (!game.round.remaining) finishRound();
+  }
+
+  function pauseRound() {
+    if (!activeRound()) return;
+    advance(performance.now());
+    if (!activeRound()) return;
+    game.beforePause = game.phase;
+    game.phase = "paused";
+    game.ads = false;
+    arena.setZoom(0);
+    stopFrame();
+    releasePointer();
+    renderArenaUi();
+    drawGame();
+    by("resume-button").focus({ preventScroll: true });
+  }
+
+  function resumeRound() {
+    if (game.phase !== "paused") return;
+    game.phase = game.beforePause;
+    game.at = performance.now();
+    renderArenaUi();
+    gameCanvas.focus({ preventScroll: true });
+    capturePointer();
+    requestFrame();
+  }
+
+  function discardRound() {
+    game.phase = "menu";
+    game.round = null;
+    stopFrame();
+    releasePointer();
+  }
+
+  function finishRound() {
+    game.phase = "results";
+    stopFrame();
+    releasePointer();
+    const stats = game.round.result();
+    const id = window.crypto?.randomUUID?.() || Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+    const record = { ...stats, id, date: Date.now() };
+    history = readHistory(storage);
+    const comparable = history.filter((item) => configKey(item) === configKey(record));
+    const previousBest = comparable.reduce((best, item) => Math.max(best, item.points), -Infinity);
+    const saved = saveRound(storage, record);
+    lastResult = record;
+    renderResults(record, previousBest, comparable, saved);
+    show("results");
+  }
+
+  function resultMetrics(record) {
+    const accuracy = percentages.format(record.accuracy);
+    if (record.mode === "tracking") {
+      return [["Mira sobre el bot", percentages.format(record.onTarget)], ["Tiempo en objetivo", shortSeconds(record.tracked)], ["Mejor racha", shortSeconds(record.bestStreak)]];
+    }
+    if (record.mode === "flicks") {
+      return [["Objetivos acertados", integers.format(record.eliminated)], ["Precisión", accuracy], ["Reacción media", reactionLabel(record)]];
+    }
+    return [[record.mode === "bots" ? "Bots eliminados" : "Bolas acertadas", integers.format(record.eliminated)], ["Precisión", accuracy], [record.mode === "bots" ? "Impactos" : "Disparos", integers.format(record.mode === "bots" ? record.hits : record.shots)]];
+  }
+
+  function reactionLabel(record) {
+    return Number.isFinite(record.reactionMs) ? integers.format(record.reactionMs) + " ms" : "—";
+  }
+
+  function statLabel(mode) {
+    if (mode === "tracking") return "En objetivo";
+    if (mode === "flicks") return "Reacción";
+    return "Precisión";
+  }
+
+  function statValue(record) {
+    if (record.mode === "flicks") return reactionLabel(record);
+    const value = record.mode === "tracking" ? record.onTarget : record.accuracy;
+    return Number.isFinite(value) ? percentages.format(value) : "—";
+  }
+
+  function table(container, rows, columns, currentId) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "table-wrap";
+    const table = document.createElement("table");
+    const headings = table.createTHead().insertRow();
+    for (const [label, , numeric] of columns) {
+      const cell = document.createElement("th");
+      cell.scope = "col";
+      cell.textContent = label;
+      if (numeric) cell.className = "numeric";
+      headings.append(cell);
+    }
+    const body = table.createTBody();
+    for (const item of rows) {
+      const row = body.insertRow();
+      if (item.id === currentId) row.className = "is-current";
+      for (const [, text, numeric] of columns) {
+        const cell = row.insertCell();
+        cell.textContent = text(item);
+        if (numeric) cell.className = "numeric";
+      }
+    }
+    wrapper.append(table);
+    container.replaceChildren(wrapper);
+  }
+
+  function renderResults(record, previousBest, comparable, saved) {
+    setText("result-mode", MODES[record.mode].name.toUpperCase() + " / " + shortSeconds(record.duration));
+    setText("result-saved", saved ? "✓ RONDA GUARDADA" : "RONDA SIN GUARDAR");
+    setText("result-score", integers.format(record.points));
+    if (Number.isFinite(previousBest)) {
+      const difference = record.points - previousBest;
+      setText("result-delta", difference === 0 ? "Récord igualado" : (difference > 0 ? "+" : "−") + integers.format(Math.abs(difference)) + " puntos");
+      setText("result-compare", "Frente a tu mejor ronda anterior");
+    } else {
+      setText("result-delta", "Primera ronda");
+      setText("result-compare", "Con esta configuración");
+    }
+    by("result-metrics").replaceChildren(...resultMetrics(record).map(([label, value]) => {
+      const metric = document.createElement("div");
+      const term = document.createElement("dt");
+      const description = document.createElement("dd");
+      term.textContent = label;
+      description.textContent = value;
+      metric.append(term, description);
+      return metric;
+    }));
+    table(by("result-history"), [record, ...comparable.slice(0, 4)], [
+      ["Ronda", (item) => item.id === record.id ? "Esta ronda" : dates.format(item.date)],
+      ["Puntos", (item) => integers.format(item.points), true],
+      [statLabel(record.mode), statValue, true],
+    ], record.id);
+    if (!saved) notice("El navegador no pudo guardar esta ronda.");
+  }
+
+  function localMonth(date) {
+    const value = new Date(date);
+    return value.getFullYear() + "-" + String(value.getMonth() + 1).padStart(2, "0");
+  }
+
+  function refreshFilters() {
+    const duration = by("history-duration");
+    const period = by("history-period");
+    const selectedDuration = duration.value;
+    const selectedPeriod = period.value;
+    while (duration.options.length > 1) duration.remove(1);
+    while (period.options.length > 4) period.remove(4);
+    const durations = [...new Set(history.map((item) => item.duration))].sort((a, b) => a - b);
+    for (const length of durations) duration.add(new Option(shortSeconds(length), String(length)));
+    for (const key of new Set(history.map((item) => localMonth(item.date)))) {
+      const [year, month] = key.split("-").map(Number);
+      period.add(new Option(months.format(new Date(year, month - 1, 1)), key));
+    }
+    duration.value = durations.includes(Number(selectedDuration)) ? selectedDuration : "all";
+    period.value = [...period.options].some((option) => option.value === selectedPeriod) ? selectedPeriod : "all";
+  }
+
+  function renderHistory() {
+    history = readHistory(storage);
+    refreshFilters();
+    const mode = by("history-mode").value;
+    const duration = by("history-duration").value;
+    const period = by("history-period").value;
+    const candidates = history.filter((item) => (mode === "all" || item.mode === mode) && (duration === "all" || item.duration === Number(duration)));
+    const rows = candidates.filter((item) => inPeriod(item, period));
+    setText("history-count", rows.length + (rows.length === 1 ? " RONDA" : " RONDAS"));
+    const summary = by("history-summary");
+    summary.hidden = !candidates.length;
+    if (candidates.length) {
+      summary.replaceChildren(...[["Últimos 7 días", "week"], ["Hace una semana", "prior-week"], ["Mes pasado", "month"]].map(([label, key]) => {
+        const data = candidates.filter((item) => inPeriod(item, key));
+        const item = document.createElement("article");
+        const heading = document.createElement("p");
+        const value = document.createElement("strong");
+        heading.className = "help";
+        heading.textContent = label;
+        value.textContent = data.length && mode !== "all" && duration !== "all"
+          ? integers.format(data.reduce((best, row) => Math.max(best, row.points), 0)) + " pts"
+          : data.length + (data.length === 1 ? " ronda" : " rondas");
+        item.append(heading, value);
+        return item;
+      }));
+    }
+    if (!rows.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = history.length ? "No hay rondas guardadas con estos filtros." : "Cuando termines tu primera ronda, aparecerá aquí.";
+      by("history-table").replaceChildren(empty);
+      return;
+    }
+    table(by("history-table"), rows, [
+      ["Fecha", (item) => dates.format(item.date)],
+      ["Modo", (item) => MODES[item.mode].name],
+      ["Duración", (item) => shortSeconds(item.duration), true],
+      ["Puntos", (item) => integers.format(item.points), true],
+      [mode === "all" ? "Métrica" : statLabel(mode), statValue, true],
+    ]);
+  }
+
+  configureMenus();
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    if (button.dataset.selectMode) {
+      setMode(button.dataset.selectMode);
+      show("setup");
+    } else if (button.dataset.pick) {
+      setMode(button.dataset.pick);
+    } else if (button.dataset.go) {
+      const next = button.dataset.go;
+      if (next === "settings" && view !== "settings") settingsReturn = view;
+      if (game.phase === "paused" && next !== "settings") discardRound();
+      show(next);
+    }
+  });
+
+  by("setup-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    settings = settingsFrom({ ...settings, duration: by("duration").valueAsNumber, health: by("health").valueAsNumber });
+    storeSettings();
+    startRound(settings);
+  });
+  for (const key of ["duration", "health"]) {
+    by(key).addEventListener("change", () => {
+      if (!by(key).validity.valid) return;
+      settings[key] = by(key).valueAsNumber;
+      storeSettings();
+      drawModePreview();
+    });
+  }
+  for (const control of directionControls) {
+    control.addEventListener("change", () => {
+      settings.directions = directionControls.filter((item) => item.checked).map((item) => item.value);
+      storeSettings();
+    });
+  }
+  by("jump").addEventListener("change", () => {
+    settings.jump = by("jump").checked;
+    storeSettings();
+  });
+  for (const id of ["width", "orb-size", "normal", "ads"]) {
+    by(id).addEventListener("input", () => {
+      const key = id === "orb-size" ? orbSetting() : id;
+      settings[key] = by(id).valueAsNumber;
+      setText(id + "-value", id === "normal" || id === "ads" ? decimals.format(settings[key]) : settings[key] + " %");
+      drawModePreview();
+    });
+    by(id).addEventListener("change", storeSettings);
+  }
+
+  by("crosshair-fields").addEventListener("input", (event) => {
+    const control = event.target;
+    const key = control.dataset.crosshair;
+    if (!key) return;
+    settings.crosshair[key] = control.type === "checkbox" ? control.checked : control.type === "range" ? control.valueAsNumber : control.value;
+    updateCrosshairEditor();
+    drawSightPreview();
+  });
+  by("crosshair-fields").addEventListener("change", storeSettings);
+  by("reset-crosshair").addEventListener("click", () => {
+    settings.crosshair = { ...DEFAULTS.crosshair };
+    storeSettings();
+    renderSettings();
+  });
+  by("test-crosshair").addEventListener("click", () => {
+    window.cancelAnimationFrame(previewAnimation);
+    const start = performance.now();
+    function animate(now) {
+      const bloom = Math.max(0, 11 - (now - start) * 0.03);
+      drawSightPreview(bloom);
+      if (bloom && view === "settings") previewAnimation = window.requestAnimationFrame(animate);
+    }
+    drawSightPreview(11);
+    previewAnimation = window.requestAnimationFrame(animate);
+  });
+  by("settings-done").addEventListener("click", () => {
+    storeSettings();
+    show(settingsReturn);
+    if (settingsReturn === "arena") by("resume-button").focus({ preventScroll: true });
+  });
+
+  by("pause-button").addEventListener("click", pauseRound);
+  by("resume-button").addEventListener("click", resumeRound);
+  by("restart-button").addEventListener("click", () => startRound(game.round.config));
+  by("pause-settings").addEventListener("click", () => {
+    settingsReturn = "arena";
+    show("settings");
+  });
+  by("leave-button").addEventListener("click", () => {
+    discardRound();
+    show("home");
+  });
+  by("repeat-button").addEventListener("click", () => startRound(lastResult));
+  by("result-all").addEventListener("click", () => {
+    by("history-mode").value = lastResult.mode;
+    by("history-period").value = "all";
+    show("history");
+    if ([...by("history-duration").options].some((option) => Number(option.value) === lastResult.duration)) {
+      by("history-duration").value = String(lastResult.duration);
+      renderHistory();
+    }
+  });
+  for (const id of ["history-mode", "history-duration", "history-period"]) by(id).addEventListener("change", renderHistory);
+
+  document.addEventListener("pointerlockchange", () => {
+    const wasLocked = game.locked;
+    game.locked = document.pointerLockElement === gameCanvas;
+    if (game.locked && !activeRound()) releasePointer();
+    if (wasLocked && !game.locked && activeRound()) pauseRound();
+    if (view === "arena") renderArenaUi();
+  });
+  document.addEventListener("pointerlockerror", () => { if (view === "arena") renderArenaUi(); });
+  document.addEventListener("mousemove", (event) => {
+    if (!game.locked || !activeRound()) return;
+    arena.look(event.movementX, event.movementY, game.ads ? settings.ads : settings.normal);
+    game.bloom = Math.min(8, game.bloom + Math.hypot(event.movementX, event.movementY) * 0.018);
+  });
+
+  function pointerAt(event) {
+    const bounds = gameCanvas.getBoundingClientRect();
+    return {
+      x: clamp(event.clientX - bounds.left, 0, arena.width),
+      y: clamp(event.clientY - bounds.top, 0, arena.height),
+    };
+  }
+
+  gameCanvas.addEventListener("pointermove", (event) => {
+    if (!activeRound() || game.locked) return;
+    const next = pointerAt(event);
+    if (game.pointer) game.bloom = Math.min(8, game.bloom + Math.hypot(next.x - game.pointer.x, next.y - game.pointer.y) * 0.018);
+    game.pointer = next;
+  });
+  gameCanvas.addEventListener("pointerleave", () => { if (!game.locked) game.pointer = null; });
+  gameCanvas.addEventListener("contextmenu", (event) => event.preventDefault());
+
+  gameCanvas.addEventListener("pointerdown", (event) => {
+    if (!activeRound()) return;
+    event.preventDefault();
+    if (!game.locked) game.pointer = pointerAt(event);
+    if (event.button === 2) {
+      game.ads = true;
+      arena.setZoom(1);
+      return;
+    }
+    if (event.button !== 0) return;
+    advance(performance.now());
+    if (game.phase !== "running") return;
+    const target = arena.hitTarget(game.round.targets, currentAim());
+    const result = game.round.shoot(target?.id);
+    if (result === "ignored") return;
+    game.hit = result !== "miss";
+    game.flash = 0.15;
+    game.bloom = 10;
+    renderArenaUi();
+    drawGame();
+  });
+  window.addEventListener("pointerup", (event) => {
+    if (event.button === 2 && game.ads) {
+      game.ads = false;
+      arena.setZoom(0);
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && view === "arena" && activeRound()) {
+      event.preventDefault();
+      pauseRound();
+    }
+  });
+  window.addEventListener("blur", pauseRound);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) pauseRound(); });
+  window.addEventListener("storage", (event) => {
+    if (event.key !== null && !event.key.startsWith(HISTORY_PREFIX)) return;
+    if (view === "history") renderHistory();
+    if (view === "home") renderHome();
+  });
+  window.addEventListener("resize", () => {
+    if (view === "arena") {
+      arena.resize();
+      drawGame();
+    }
+    drawModePreview();
+    drawSightPreview();
+  });
+  show("home", false);
+})();
+</script>
+</body>
+</html>
